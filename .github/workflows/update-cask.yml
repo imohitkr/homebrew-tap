@@ -17,16 +17,26 @@ permissions:
   contents: read
 
 # Actions are pinned to full commit SHAs, so a moved tag cannot change them.
+#
+# Two jobs keep the write token away from the release download:
+# - verify has a read-only token. It compares the versions, downloads
+#   ColimaBar.zip and verifies its attestation. It outputs the version and
+#   the sha256.
+# - update runs only after verify succeeds. It has the write token. It
+#   edits the cask, pushes to main and starts the Test workflow.
 jobs:
-  update:
+  verify:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
-      contents: write   # push the cask update to main
-      actions: write    # start the Test workflow
+      contents: read
     env:
       CASK: Casks/colima-bar.rb
       UPSTREAM: imohitkr/colima-bar
+    outputs:
+      update: ${{ steps.check.outputs.update }}
+      version: ${{ steps.check.outputs.version }}
+      sha256: ${{ steps.verify.outputs.sha256 }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -82,12 +92,33 @@ jobs:
           sha=$(sha256sum "$dir/ColimaBar.zip" | cut -d ' ' -f 1)
           echo "sha256=$sha" >> "$GITHUB_OUTPUT"
 
+  update:
+    needs: verify
+    if: needs.verify.outputs.update == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write   # push the cask update to main
+      actions: write    # start the Test workflow
+    env:
+      CASK: Casks/colima-bar.rb
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+
+      # This step gets no token. It checks the outputs of verify again,
+      # because they cross a job boundary.
       - name: Update the cask
-        if: steps.check.outputs.update == 'true'
         env:
-          VERSION: ${{ steps.check.outputs.version }}
-          SHA256: ${{ steps.verify.outputs.sha256 }}
+          VERSION: ${{ needs.verify.outputs.version }}
+          SHA256: ${{ needs.verify.outputs.sha256 }}
         run: |
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Unexpected version: $VERSION"
+            exit 1
+          fi
           if [[ ! "$SHA256" =~ ^[0-9a-f]{64}$ ]]; then
             echo "::error::Unexpected sha256: $SHA256"
             exit 1
@@ -100,12 +131,11 @@ jobs:
           grep -qx "  sha256 \"$SHA256\"" "$CASK"
           git diff
 
-      # Only this step gets credentials. It pushes with the token of this run.
+      # It pushes with the token of this run.
       - name: Commit and push
-        if: steps.check.outputs.update == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ steps.check.outputs.version }}
+          VERSION: ${{ needs.verify.outputs.version }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -113,7 +143,6 @@ jobs:
           git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:main
 
       - name: Start the Test workflow
-        if: steps.check.outputs.update == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh workflow run test.yml --repo "$GITHUB_REPOSITORY" --ref main

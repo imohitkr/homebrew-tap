@@ -32,7 +32,7 @@ cask "colima-bar" do
     System Settings > Privacy & Security and click "Open Anyway". Or run:
       xattr -dr com.apple.quarantine /Applications/ColimaBar.app
 
-    `brew uninstall` cannot restore your docker settings (docker context,
+    `brew uninstall` cannot restore your docker settings (docker contexts,
     launchd DOCKER_HOST, testcontainers). Before you run `brew uninstall`,
     choose "Uninstall ColimaBar…" in the right-click menu of ColimaBar.
     If your version does not have that menu item, run this script:

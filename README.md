@@ -31,7 +31,7 @@ A workflow in this repository checks for a new ColimaBar release every 6 hours. 
 1. Right-click the ColimaBar menu bar icon and choose **Uninstall ColimaBar…**. If your version does not have this menu item, run `/Applications/ColimaBar.app/Contents/Resources/uninstall.sh`.
 2. Run `brew uninstall --cask colima-bar`.
 
-The first step restores the docker context, the launchd `DOCKER_HOST` and the testcontainers settings. It also removes the app. The second step removes the Homebrew record of the cask.
+The first step restores the docker context and removes the `colimabar` and `colimabar-PROFILE` contexts. It also clears the launchd `DOCKER_HOST` and the testcontainers settings, and removes the app. The second step removes the Homebrew record of the cask.
 
 ## Problems
 
