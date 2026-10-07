@@ -109,8 +109,10 @@ jobs:
           persist-credentials: false
 
       # This step gets no token. It checks the outputs of verify again,
-      # because they cross a job boundary.
+      # because they cross a job boundary. It also compares the versions
+      # again, because main can change after verify ran.
       - name: Update the cask
+        id: edit
         env:
           VERSION: ${{ needs.verify.outputs.version }}
           SHA256: ${{ needs.verify.outputs.sha256 }}
@@ -123,6 +125,17 @@ jobs:
             echo "::error::Unexpected sha256: $SHA256"
             exit 1
           fi
+          current=$(sed -n 's/^  version "\([0-9.]*\)"$/\1/p' "$CASK")
+          if [ -z "$current" ]; then
+            echo "::error::Cannot read the version from $CASK"
+            exit 1
+          fi
+          newest=$(printf '%s\n%s\n' "$current" "$VERSION" | sort -V | tail -n 1)
+          if [ "$VERSION" = "$current" ] || [ "$newest" != "$VERSION" ]; then
+            echo "::notice::The cask on main has $current. It is not older than $VERSION. No update."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           sed -i \
             -e "s/^  version \"[0-9.]*\"$/  version \"$VERSION\"/" \
             -e "s/^  sha256 \"[0-9a-f]*\"$/  sha256 \"$SHA256\"/" \
@@ -130,9 +143,11 @@ jobs:
           grep -qx "  version \"$VERSION\"" "$CASK"
           grep -qx "  sha256 \"$SHA256\"" "$CASK"
           git diff
+          echo "changed=true" >> "$GITHUB_OUTPUT"
 
       # It pushes with the token of this run.
       - name: Commit and push
+        if: steps.edit.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.verify.outputs.version }}
@@ -143,6 +158,7 @@ jobs:
           git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:main
 
       - name: Start the Test workflow
+        if: steps.edit.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh workflow run test.yml --repo "$GITHUB_REPOSITORY" --ref main
