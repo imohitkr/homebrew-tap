@@ -24,10 +24,7 @@ cask "colima-bar" do
 
   zap launchctl: "com.imohitkr.ColimaBar.login",
       delete:    "~/Library/LaunchAgents/com.imohitkr.ColimaBar.login.plist",
-      trash:     [
-        "~/.cache/colima-bar",
-        "~/Library/Preferences/com.imohitkr.ColimaBar.plist",
-      ]
+      trash:     "~/Library/Preferences/com.imohitkr.ColimaBar.plist"
 
   caveats <<~EOS
     Apple does not notarize ColimaBar. Thus macOS blocks the first launch
