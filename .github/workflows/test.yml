@@ -1,0 +1,64 @@
+name: Test
+
+# Checks the cask with brew style and brew audit. Then it installs and
+# uninstalls the cask on a GitHub-hosted Mac with Apple silicon.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+# Actions are pinned to full commit SHAs, so a moved tag cannot change them.
+jobs:
+  cask:
+    runs-on: macos-15
+    timeout-minutes: 20
+    env:
+      HOMEBREW_NO_AUTO_UPDATE: "1"
+      HOMEBREW_NO_INSTALL_CLEANUP: "1"
+      HOMEBREW_NO_ANALYTICS: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Homebrew loads a tap from its Taps folder. Link this checkout there,
+      # so the commands test the code of this commit.
+      - name: Set up the tap
+        run: |
+          brew --version
+          tap_dir="$(brew --repository)/Library/Taps/imohitkr/homebrew-tap"
+          mkdir -p "$(dirname "$tap_dir")"
+          rm -rf "$tap_dir"
+          ln -s "$GITHUB_WORKSPACE" "$tap_dir"
+          brew trust imohitkr/tap
+
+      - name: brew style
+        run: brew style imohitkr/tap
+
+      - name: brew audit
+        run: brew audit --cask --strict --online imohitkr/tap/colima-bar
+
+      - name: brew livecheck
+        run: brew livecheck --cask imohitkr/tap/colima-bar
+
+      - name: Install
+        run: |
+          brew install --cask imohitkr/tap/colima-bar
+          want=$(brew info --cask --json=v2 imohitkr/tap/colima-bar | jq -r '.casks[0].version')
+          got=$(plutil -extract CFBundleShortVersionString raw \
+            /Applications/ColimaBar.app/Contents/Info.plist)
+          echo "cask version: $want, app version: $got"
+          test "$want" = "$got"
+
+      - name: Uninstall
+        run: |
+          brew uninstall --cask colima-bar
+          test ! -e /Applications/ColimaBar.app

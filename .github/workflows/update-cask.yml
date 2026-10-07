@@ -1,0 +1,119 @@
+name: Update cask
+
+# Checks the latest ColimaBar release every 6 hours. If it is newer than the
+# cask, this workflow verifies the release zip and commits the new version
+# and sha256 to main. Then it starts the Test workflow, because a push with
+# GITHUB_TOKEN does not start other workflows.
+on:
+  schedule:
+    - cron: "23 */6 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: update-cask
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+# Actions are pinned to full commit SHAs, so a moved tag cannot change them.
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write   # push the cask update to main
+      actions: write    # start the Test workflow
+    env:
+      CASK: Casks/colima-bar.rb
+      UPSTREAM: imohitkr/colima-bar
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Compare versions
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag=$(gh release view --repo "$UPSTREAM" --json tagName --jq .tagName)
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::The latest release has an unexpected tag: $tag"
+            exit 1
+          fi
+          latest=${tag#v}
+          current=$(sed -n 's/^  version "\([0-9.]*\)"$/\1/p' "$CASK")
+          if [ -z "$current" ]; then
+            echo "::error::Cannot read the version from $CASK"
+            exit 1
+          fi
+          newest=$(printf '%s\n%s\n' "$current" "$latest" | sort -V | tail -n 1)
+          if [ "$latest" = "$current" ] || [ "$newest" != "$latest" ]; then
+            echo "The cask has $current. The latest release is $latest. No update."
+            echo "update=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "Update $current -> $latest"
+          {
+            echo "update=true"
+            echo "tag=$tag"
+            echo "version=$latest"
+          } >> "$GITHUB_OUTPUT"
+
+      # The attestation proves that the release job of ci.yml built the zip
+      # from the release tag on a GitHub-hosted runner.
+      - name: Download and verify ColimaBar.zip
+        id: verify
+        if: steps.check.outputs.update == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.check.outputs.tag }}
+        run: |
+          dir="$RUNNER_TEMP/release"
+          mkdir -p "$dir"
+          gh release download "$TAG" --repo "$UPSTREAM" --pattern ColimaBar.zip --dir "$dir"
+          gh attestation verify "$dir/ColimaBar.zip" \
+            --repo "$UPSTREAM" \
+            --signer-workflow "$UPSTREAM/.github/workflows/ci.yml" \
+            --source-ref "refs/tags/$TAG" \
+            --deny-self-hosted-runners
+          sha=$(sha256sum "$dir/ColimaBar.zip" | cut -d ' ' -f 1)
+          echo "sha256=$sha" >> "$GITHUB_OUTPUT"
+
+      - name: Update the cask
+        if: steps.check.outputs.update == 'true'
+        env:
+          VERSION: ${{ steps.check.outputs.version }}
+          SHA256: ${{ steps.verify.outputs.sha256 }}
+        run: |
+          if [[ ! "$SHA256" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "::error::Unexpected sha256: $SHA256"
+            exit 1
+          fi
+          sed -i \
+            -e "s/^  version \"[0-9.]*\"$/  version \"$VERSION\"/" \
+            -e "s/^  sha256 \"[0-9a-f]*\"$/  sha256 \"$SHA256\"/" \
+            "$CASK"
+          grep -qx "  version \"$VERSION\"" "$CASK"
+          grep -qx "  sha256 \"$SHA256\"" "$CASK"
+          git diff
+
+      # Only this step gets credentials. It pushes with the token of this run.
+      - name: Commit and push
+        if: steps.check.outputs.update == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.check.outputs.version }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "Update colima-bar to $VERSION"
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:main
+
+      - name: Start the Test workflow
+        if: steps.check.outputs.update == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run test.yml --repo "$GITHUB_REPOSITORY" --ref main
