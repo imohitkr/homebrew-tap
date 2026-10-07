@@ -43,10 +43,17 @@ jobs:
       - name: brew style
         run: brew style imohitkr/tap
 
+      # --online and livecheck call the GitHub API. Without a token, a shared
+      # runner IP soon hits the limit of 60 requests each hour. This token
+      # can only read (permissions above).
       - name: brew audit
+        env:
+          HOMEBREW_GITHUB_API_TOKEN: ${{ github.token }}
         run: brew audit --cask --strict --online imohitkr/tap/colima-bar
 
       - name: brew livecheck
+        env:
+          HOMEBREW_GITHUB_API_TOKEN: ${{ github.token }}
         run: brew livecheck --cask imohitkr/tap/colima-bar
 
       - name: Install
