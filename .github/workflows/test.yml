@@ -64,8 +64,12 @@ jobs:
             /Applications/ColimaBar.app/Contents/Info.plist)
           echo "cask version: $want, app version: $got"
           test "$want" = "$got"
+          test -L "$(brew --prefix)/bin/colimabar"
+          xattr -dr com.apple.quarantine /Applications/ColimaBar.app
+          test "$("$(brew --prefix)/bin/colimabar" version)" = "colimabar $got"
 
       - name: Uninstall
         run: |
           brew uninstall --cask colima-bar
           test ! -e /Applications/ColimaBar.app
+          test ! -e "$(brew --prefix)/bin/colimabar"

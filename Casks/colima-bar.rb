@@ -16,6 +16,7 @@ cask "colima-bar" do
   depends_on macos: :sonoma
 
   app "ColimaBar.app"
+  binary "#{appdir}/ColimaBar.app/Contents/Resources/bin/colimabar"
 
   # `brew upgrade` also runs the uninstall directives. An upgrade must keep
   # the login item (com.imohitkr.ColimaBar.login), so `zap` removes it.
