@@ -16,6 +16,7 @@ cask "colima-bar" do
   depends_on macos: :sonoma
 
   app "ColimaBar.app"
+  binary "#{appdir}/ColimaBar.app/Contents/Resources/bin/colimabar"
 
   # `brew upgrade` also runs the uninstall directives. An upgrade must keep
   # the login item (com.imohitkr.ColimaBar.login), so `zap` removes it.
@@ -28,9 +29,12 @@ cask "colima-bar" do
 
   caveats <<~EOS
     Apple does not notarize ColimaBar. Thus macOS blocks the first launch
-    after you install or upgrade it. To allow ColimaBar, open
+    after you install or upgrade it ("ColimaBar" Not Opened). Click "Done".
+    Do not click "Move to Bin": it deletes ColimaBar. To allow ColimaBar, open
     System Settings > Privacy & Security and click "Open Anyway". Or run:
       xattr -dr com.apple.quarantine /Applications/ColimaBar.app
+    If you clicked "Move to Bin", run `brew reinstall --cask colima-bar`,
+    then the xattr command above.
 
     `brew uninstall` cannot restore your docker settings (docker contexts,
     launchd DOCKER_HOST, testcontainers). Before you run `brew uninstall`,
