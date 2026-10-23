@@ -1,9 +1,10 @@
 name: Update cask
 
 # Checks the latest ColimaBar release every 6 hours. If it is newer than the
-# cask, this workflow verifies the release zip and commits the new version
-# and sha256 to main. Then it starts the Test workflow, because a push with
-# GITHUB_TOKEN does not start other workflows.
+# cask, this workflow verifies the release zip and commits the new version,
+# the sha256 and the minimum macOS (from the "Requires macOS X or later."
+# line of the release notes) to main. Then it starts the Test workflow,
+# because a push with GITHUB_TOKEN does not start other workflows.
 on:
   schedule:
     - cron: "23 */6 * * *"
@@ -36,6 +37,7 @@ jobs:
     outputs:
       update: ${{ steps.check.outputs.update }}
       version: ${{ steps.check.outputs.version }}
+      macos: ${{ steps.check.outputs.macos }}
       sha256: ${{ steps.verify.outputs.sha256 }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -65,11 +67,28 @@ jobs:
             echo "update=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          echo "Update $current -> $latest"
+          # The release notes name the macOS that the build needs. Homebrew
+          # names macOS versions; a new major version needs a line here. No
+          # line keeps the cask's depends_on macos as it is.
+          body=$(gh release view "$tag" --repo "$UPSTREAM" --json body --jq .body)
+          macos=""
+          if [[ "$body" =~ Requires\ macOS\ ([0-9]+)(\.[0-9]+){0,2}\ or\ later ]]; then
+            case "${BASH_REMATCH[1]}" in
+              14) macos=sonoma ;;
+              15) macos=sequoia ;;
+              26) macos=tahoe ;;
+              *)
+                echo "::error::No Homebrew name for macOS ${BASH_REMATCH[1]}"
+                exit 1
+                ;;
+            esac
+          fi
+          echo "Update $current -> $latest (macOS: ${macos:-unchanged})"
           {
             echo "update=true"
             echo "tag=$tag"
             echo "version=$latest"
+            echo "macos=$macos"
           } >> "$GITHUB_OUTPUT"
 
       # The attestation proves that the release job of ci.yml built the zip
@@ -116,6 +135,7 @@ jobs:
         env:
           VERSION: ${{ needs.verify.outputs.version }}
           SHA256: ${{ needs.verify.outputs.sha256 }}
+          MACOS: ${{ needs.verify.outputs.macos }}
         run: |
           if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "::error::Unexpected version: $VERSION"
@@ -123,6 +143,10 @@ jobs:
           fi
           if [[ ! "$SHA256" =~ ^[0-9a-f]{64}$ ]]; then
             echo "::error::Unexpected sha256: $SHA256"
+            exit 1
+          fi
+          if [[ ! "$MACOS" =~ ^(sonoma|sequoia|tahoe)?$ ]]; then
+            echo "::error::Unexpected macOS: $MACOS"
             exit 1
           fi
           current=$(sed -n 's/^  version "\([0-9.]*\)"$/\1/p' "$CASK")
@@ -142,6 +166,10 @@ jobs:
             "$CASK"
           grep -qx "  version \"$VERSION\"" "$CASK"
           grep -qx "  sha256 \"$SHA256\"" "$CASK"
+          if [ -n "$MACOS" ]; then
+            sed -i "s/^  depends_on macos: :[a-z]*$/  depends_on macos: :$MACOS/" "$CASK"
+            grep -qx "  depends_on macos: :$MACOS" "$CASK"
+          fi
           git diff
           echo "changed=true" >> "$GITHUB_OUTPUT"
 
