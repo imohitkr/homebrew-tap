@@ -1,6 +1,6 @@
 cask "colima-bar" do
-  version "0.13.0"
-  sha256 "c569c4af4dffaeb89fc9916e9de068b18330de1260292236a41955d7bbd0ffeb"
+  version "0.15.0"
+  sha256 "dd1179b0ae24520645ceef9b223019be522b2b98007c58048c1e9ca2d3619cfa"
 
   url "https://github.com/imohitkr/colima-bar/releases/download/v#{version}/ColimaBar.zip"
   name "ColimaBar"
@@ -13,7 +13,7 @@ cask "colima-bar" do
   end
 
   depends_on arch: :arm64
-  depends_on macos: :sonoma
+  depends_on macos: :sequoia
 
   app "ColimaBar.app"
   binary "#{appdir}/ColimaBar.app/Contents/Resources/bin/colimabar"
