@@ -1,6 +1,6 @@
 cask "colima-bar" do
-  version "0.17.0"
-  sha256 "3b2607399eae3d8c22ca76998500df9992257a27c562520d476f0e1fd19b6620"
+  version "0.18.0"
+  sha256 "b61c8d4e5b2e266923a601008b10e907abc28229ccd2197394fc97afa2337ac3"
 
   url "https://github.com/imohitkr/colima-bar/releases/download/v#{version}/ColimaBar.zip"
   name "ColimaBar"
