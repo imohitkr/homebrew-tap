@@ -22,7 +22,7 @@ xattr -dr com.apple.quarantine /Applications/ColimaBar.app
 brew upgrade --cask colima-bar
 ```
 
-A workflow in this repository checks for a new ColimaBar release every 6 hours. Before it updates the cask, it verifies the build provenance attestation of `ColimaBar.zip`.
+A workflow in this repository checks for a new ColimaBar release every hour, and the ColimaBar release job starts it right after a release. Before it updates the cask, it verifies the build provenance attestation of `ColimaBar.zip`.
 
 ## Uninstall
 

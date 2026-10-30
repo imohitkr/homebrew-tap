@@ -1,13 +1,15 @@
 name: Update cask
 
-# Checks the latest ColimaBar release every 6 hours. If it is newer than the
-# cask, this workflow verifies the release zip and commits the new version,
-# the sha256 and the minimum macOS (from the "Requires macOS X or later."
-# line of the release notes) to main. Then it starts the Test workflow,
-# because a push with GITHUB_TOKEN does not start other workflows.
+# Checks the latest ColimaBar release every hour. The release job of
+# colima-bar also starts this workflow right after it publishes a release.
+# If the release is newer than the cask, this workflow verifies the release
+# zip and commits the new version, the sha256 and the minimum macOS (from the
+# "Requires macOS X or later." line of the release notes) to main. Then it
+# starts the Test workflow, because a push with GITHUB_TOKEN does not start
+# other workflows.
 on:
   schedule:
-    - cron: "23 */6 * * *"
+    - cron: "23 * * * *"
   workflow_dispatch:
 
 concurrency:
